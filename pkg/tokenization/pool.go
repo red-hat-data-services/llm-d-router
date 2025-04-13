@@ -2,6 +2,7 @@ package tokenization
 
 import (
 	"context"
+	"fmt"
 	"sync"
 
 	"k8s.io/client-go/util/workqueue"
@@ -85,7 +86,9 @@ func (pool *Pool) processTask(task Task) error {
 		return err
 	}
 
-	pool.indexer.AddFullTokenization(task.ModelName, task.Prompt, tokenIds, offsets)
+	if err := pool.indexer.AddTokenization(task.ModelName, task.Prompt, tokenIds, offsets); err != nil {
+		return fmt.Errorf("tokenization failed for model %s: %w", task.ModelName, err)
+	}
 
 	return nil
 }

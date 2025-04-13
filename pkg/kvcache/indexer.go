@@ -49,7 +49,14 @@ func NewKVCacheIndexer(cfg Config) (*KVCacheIndexer, error) {
 		return nil, fmt.Errorf("could not connect to Redis: %w", err)
 	}
 
-	tokensIndexer := tokenization.NewContainedTokenStore()
+	tokensIndexer, err := tokenization.NewLRUTokenStore(&tokenization.LRUStoreConfig{
+		BlockSize: tokenization.DefaultBlockSize,
+		CacheSize: tokenization.DefaultMaxCacheSize,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create token indexer: %w", err)
+	}
+
 	return &KVCacheIndexer{
 		tokensIndexer:   tokensIndexer,
 		tokensProcessor: NewChunkedTokenDatabase(cfg.LMCacheEngineConfig, cfg.LMCacheEngineMetadata),
