@@ -23,11 +23,14 @@ import (
 	"strings"
 	"time"
 
-	tokenizerpb "github.com/llm-d/llm-d-kv-cache/api/tokenizerpb"
-	types "github.com/llm-d/llm-d-kv-cache/pkg/tokenization/types"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/keepalive"
+	"sigs.k8s.io/controller-runtime/pkg/log"
+
+	tokenizerpb "github.com/llm-d/llm-d-kv-cache/api/tokenizerpb"
+	types "github.com/llm-d/llm-d-kv-cache/pkg/tokenization/types"
+	"github.com/llm-d/llm-d-kv-cache/pkg/utils/logging"
 )
 
 // UdsTokenizerConfig represents the configuration for the UDS-based tokenizer,
@@ -233,12 +236,32 @@ func (u *UdsTokenizer) RenderChat(
 	defer cancel()
 
 	// Convert conversation messages to proto format
+	traceLogger := log.FromContext(ctx).V(logging.TRACE).WithName("UdsTokenizer.RenderChat")
 	messages := make([]*tokenizerpb.ChatMessage, 0, len(renderReq.Conversation))
 	for _, msg := range renderReq.Conversation {
-		messages = append(messages, &tokenizerpb.ChatMessage{
-			Role:    msg.Role,
-			Content: msg.Content,
-		})
+		pbMsg := &tokenizerpb.ChatMessage{Role: msg.Role}
+		if len(msg.Content.Structured) > 0 {
+			parts := make([]*tokenizerpb.ContentPart, 0, len(msg.Content.Structured))
+			for _, block := range msg.Content.Structured {
+				part := &tokenizerpb.ContentPart{Type: block.Type}
+				switch block.Type {
+				case "text":
+					text := block.Text
+					part.Text = &text
+				case "image_url":
+					part.ImageUrl = &tokenizerpb.ImageUrl{Url: block.ImageURL.URL}
+				default:
+					traceLogger.Info("dropping unsupported chat message content block type, it will not be rendered", "type", block.Type)
+					continue
+				}
+				parts = append(parts, part)
+			}
+			pbMsg.Content = &tokenizerpb.ChatMessage_Parts{Parts: &tokenizerpb.ContentPartList{Parts: parts}}
+		} else {
+			text := msg.Content.Raw
+			pbMsg.Content = &tokenizerpb.ChatMessage_Text{Text: text}
+		}
+		messages = append(messages, pbMsg)
 	}
 	conversationTurns := []*tokenizerpb.ConversationTurn{
 		{Messages: messages},
