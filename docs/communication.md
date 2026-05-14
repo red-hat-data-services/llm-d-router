@@ -328,7 +328,8 @@ Example for `/v1/chat/completions`:
   "kv_transfer_params": {
     "block_id": "block-999",
     "peer_host": "10.0.0.42",
-    "peer_port": 7777
+    "peer_port": 7777,
+    "do_remote_prefill": true
   }
 }
 ```
@@ -337,6 +338,7 @@ Example for `/v1/chat/completions`:
 - `uuid` is added to each `image_url` content part (value is the mm_hash from the render step)
 - `image_url` is set to `null` (the decode worker doesn't need the image data, it uses uuid to reference the KV cache)
 - `kv_transfer_params` is injected at the top level of the request body
+- `do_remote_prefill: true` is added by the coordinator to signal the decode worker to fetch KV from the remote prefill worker
 - The path uses the original client path: `/decode/v1/chat/completions` or `/decode/v1/completions`
 
 ### Response (non-streaming)
