@@ -40,6 +40,24 @@ const (
 	FormatChatCompletions
 )
 
+func (f RequestFormat) String() string {
+	switch f {
+	case FormatGenerate:
+		return DefaultGeneratePath
+	case FormatCompletions:
+		return PathCompletions
+	case FormatChatCompletions:
+		return PathChatCompletions
+	default:
+		return "unknown"
+	}
+}
+
+// DetectFormat classifies an inbound request path. The chi router registers
+// only PathChatCompletions and PathCompletions, so in production path is always
+// one of those two; the FormatGenerate fallback covers only callers that pass an
+// arbitrary path. There is no error return because an unrecognized path is not a
+// failure: it maps to the generate format by design.
 func DetectFormat(path string) RequestFormat {
 	if strings.Contains(path, PathChatCompletions) {
 		return FormatChatCompletions
