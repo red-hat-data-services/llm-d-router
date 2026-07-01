@@ -34,7 +34,7 @@ make test
 
 ## Configuration
 
-Configuration is a YAML file passed via the `--config` flag. See `configs/coordinator.yaml` for the default.
+Configuration is a YAML file passed via the `--config` flag. See `config/coordinator/coordinator.yaml` for the default.
 
 ### Server
 

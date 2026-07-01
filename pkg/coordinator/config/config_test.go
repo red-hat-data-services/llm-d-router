@@ -80,7 +80,7 @@ func TestLoadEnvOverride(t *testing.T) {
 		},
 		{
 			// Nested keys reach viper only because Load installs a "." -> "_"
-			// env key replacer; configs/coordinator.yaml documents this var.
+			// env key replacer; config/coordinator/coordinator.yaml documents this var.
 			name:   "nested bool",
 			envKey: "COORDINATOR_PIPELINE_USE_OPENAI_FORMAT",
 			envVal: "false",

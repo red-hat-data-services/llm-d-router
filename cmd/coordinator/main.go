@@ -31,15 +31,15 @@ import (
 
 	logutil "github.com/llm-d/llm-d-router/pkg/common/observability/logging"
 
-	"github.com/llm-d/coordinator/pkg/config"
-	"github.com/llm-d/coordinator/pkg/gateway"
-	"github.com/llm-d/coordinator/pkg/pipeline"
-	"github.com/llm-d/coordinator/pkg/server"
-	"github.com/llm-d/coordinator/pkg/steps"
+	"github.com/llm-d/llm-d-router/pkg/coordinator/config"
+	"github.com/llm-d/llm-d-router/pkg/coordinator/gateway"
+	"github.com/llm-d/llm-d-router/pkg/coordinator/pipeline"
+	"github.com/llm-d/llm-d-router/pkg/coordinator/server"
+	"github.com/llm-d/llm-d-router/pkg/coordinator/steps"
 )
 
 func main() {
-	configPath := pflag.String("config", "configs/coordinator.yaml", "path to configuration file")
+	configPath := pflag.String("config", "config/coordinator/coordinator.yaml", "path to configuration file")
 
 	logOpts := logutil.NewOptions()
 	logOpts.AddFlags(pflag.CommandLine)

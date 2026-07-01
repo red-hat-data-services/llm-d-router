@@ -144,23 +144,23 @@ completions prompt is already a token array). See
 
 | Component | Path | Responsibility |
 | :---- | :---- | :---- |
-| Entry server | [pkg/server/](../pkg/server/) | chi HTTP server. Accepts `/v1/chat/completions` and `/v1/completions`, builds the `RequestContext`, runs the pipeline, exposes `/healthz` and `/readyz`. |
-| Pipeline | [pkg/pipeline/](../pkg/pipeline/) | The `Step` abstraction, the ordered executor, the step registry, and the `RequestContext`. |
-| Steps | [pkg/steps/](../pkg/steps/) | The built-in steps. Each registers itself with the pipeline registry in an `init()` function. |
-| Gateway client | [pkg/gateway/](../pkg/gateway/) | HTTP client with a keep-alive pool to the configured Inference Gateway, path/format helpers, and the `EPP-Phase` header constants. |
-| Connectors | [pkg/connectors/](../pkg/connectors/) | KV and EC transfer protocols. Selected by name at config time; control the `kv_transfer_params` / `ec_transfer_params` wire shapes. |
-| Config | [pkg/config/](../pkg/config/) | Viper-backed YAML + env loader. |
+| Entry server | [pkg/coordinator/server/](../pkg/coordinator/server/) | chi HTTP server. Accepts `/v1/chat/completions` and `/v1/completions`, builds the `RequestContext`, runs the pipeline, exposes `/healthz` and `/readyz`. |
+| Pipeline | [pkg/coordinator/pipeline/](../pkg/coordinator/pipeline/) | The `Step` abstraction, the ordered executor, the step registry, and the `RequestContext`. |
+| Steps | [pkg/coordinator/steps/](../pkg/coordinator/steps/) | The built-in steps. Each registers itself with the pipeline registry in an `init()` function. |
+| Gateway client | [pkg/coordinator/gateway/](../pkg/coordinator/gateway/) | HTTP client with a keep-alive pool to the configured Inference Gateway, path/format helpers, and the `EPP-Phase` header constants. |
+| Connectors | [pkg/coordinator/connectors/](../pkg/coordinator/connectors/) | KV and EC transfer protocols. Selected by name at config time; control the `kv_transfer_params` / `ec_transfer_params` wire shapes. |
+| Config | [pkg/coordinator/config/](../pkg/coordinator/config/) | Viper-backed YAML + env loader. |
 | Entrypoint | [cmd/coordinator/](../cmd/coordinator/) | Wires config to the pipeline: builds each step, merges connector defaults, injects the gateway client. |
 
 ## Request lifecycle
 
-1. [pkg/server/handlers.go](../pkg/server/handlers.go) reads and size-limits the body,
+1. [pkg/coordinator/server/handlers.go](../pkg/coordinator/server/handlers.go) reads and size-limits the body,
    parses it into a `map[string]any`, extracts `model` and `stream`, assigns or reuses
    the request ID, and constructs a `RequestContext`. Malformed input is rejected before
    the pipeline runs: an unreadable body or invalid JSON returns `400 Bad Request`, and a
    body exceeding the fixed built-in size limit returns `413 Request Entity Too Large`.
 2. The server calls `pipeline.Execute(ctx, reqCtx)`.
-3. [pkg/pipeline/pipeline.go](../pkg/pipeline/pipeline.go) runs each step in order. A
+3. [pkg/coordinator/pipeline/pipeline.go](../pkg/coordinator/pipeline/pipeline.go) runs each step in order. A
    step returning an error aborts the request, and the server maps the error to a
    client status (`classifyPipelineError`):
    - a step error wrapping `ErrBadRequest` (invalid client input) returns `400 Bad Request`;
@@ -178,7 +178,7 @@ completions prompt is already a token array). See
 
 ### RequestContext
 
-[pkg/pipeline/context.go](../pkg/pipeline/context.go) defines the per-request state that
+[pkg/coordinator/pipeline/context.go](../pkg/coordinator/pipeline/context.go) defines the per-request state that
 steps read and mutate. The load-bearing fields:
 
 | Field | Set by | Used by |
@@ -200,7 +200,7 @@ it as the base header set, then stamp the request ID and `EPP-Phase`.
 
 Every coordinator-to-worker call carries an `EPP-Phase` header (`encode`, `prefill`, or
 `decode`) so the gateway routes to the correct pool. The constants live in
-[pkg/gateway/paths.go](../pkg/gateway/paths.go). The request path is either the client's
+[pkg/coordinator/gateway/paths.go](../pkg/coordinator/gateway/paths.go). The request path is either the client's
 original OpenAI path or the internal `/inference/v1/generate` path, depending on
 `use_openai_format` (see [Configuring the pipeline](#configuring-the-pipeline)). Other
 paths can be added later as new protocols are supported.
@@ -261,10 +261,10 @@ are not yet consumed by the coordinator.
 
 Because the coordinator builds the prefill and decode request bodies itself, it must
 emit the `kv_transfer_params` / `ec_transfer_params` shape the vLLM pods expect. That
-shape is owned by the configured connectors ([pkg/connectors/](../pkg/connectors/)),
+shape is owned by the configured connectors ([pkg/coordinator/connectors/](../pkg/coordinator/connectors/)),
 selected deployment-wide and required to match the connector configured on the pods.
 
-KV connector protocols ([pkg/connectors/kv/](../pkg/connectors/kv/)):
+KV connector protocols ([pkg/coordinator/connectors/kv/](../pkg/coordinator/connectors/kv/)):
 
 | Connector | llm-d-router sidecar equivalent | Protocol |
 | :---- | :---- | :---- |
@@ -277,7 +277,7 @@ overridden process-wide with the `SGLANG_BOOTSTRAP_PORT` environment variable. T
 is read once on the first prefill request that uses the connector; a non-integer value is
 rejected in favor of the default and logged at error level.
 
-EC connector protocols ([pkg/connectors/ec/](../pkg/connectors/ec/)) ship encoder
+EC connector protocols ([pkg/coordinator/connectors/ec/](../pkg/coordinator/connectors/ec/)) ship encoder
 embeddings from encode pods to the prefill pod:
 
 | Connector | llm-d-router sidecar equivalent | Protocol |
@@ -365,16 +365,16 @@ calls the `Step` interface and looks steps up by name in a registry. To add beha
 write a step, register it under a type name, and reference that name via the `type`
 field in the config.
 
-Before writing a new step, read the closest existing one. [render.go](../pkg/steps/render.go)
-is the reference for calling a side service; [encode.go](../pkg/steps/encode.go) is the
-reference for parallel fan-out to workers; [decode.go](../pkg/steps/decode.go) and
-[conditional_decode.go](../pkg/steps/conditional_decode.go) are the reference for
+Before writing a new step, read the closest existing one. [render.go](../pkg/coordinator/steps/render.go)
+is the reference for calling a side service; [encode.go](../pkg/coordinator/steps/encode.go) is the
+reference for parallel fan-out to workers; [decode.go](../pkg/coordinator/steps/decode.go) and
+[conditional_decode.go](../pkg/coordinator/steps/conditional_decode.go) are the reference for
 proxying a streaming response back to the client. Follow the structure and naming of
 whichever is closest to your task.
 
 ### The Step contract
 
-A step implements [pkg/pipeline/step.go](../pkg/pipeline/step.go):
+A step implements [pkg/coordinator/pipeline/step.go](../pkg/coordinator/pipeline/step.go):
 
 ```go
 type Step interface {
@@ -474,7 +474,7 @@ edit: registration is the only wiring step.
   into every step's `params` by the entrypoint before the factory runs (see below), so a
   step can read them without the operator repeating them per step. The constants are
   `steps.ParamKVConnector` and `steps.ParamECConnector`.
-- Shared parsing helpers live in [pkg/steps/utils.go](../pkg/steps/utils.go)
+- Shared parsing helpers live in [pkg/coordinator/steps/utils.go](../pkg/coordinator/steps/utils.go)
   (`parseUseOpenAIFormat`, `resolveFormat`, `buildMMFeatures`, `copyBody`,
   `coerceParamsMap`). Reuse them rather than re-implementing.
 
@@ -485,7 +485,7 @@ config (the gateway client, a side-service address) are injected by the entrypoi
 construction, via optional setter interfaces it type-asserts against.
 
 The gateway client is injected through the `gateway.ClientAware` interface
-([pkg/gateway/client.go](../pkg/gateway/client.go)):
+([pkg/coordinator/gateway/client.go](../pkg/coordinator/gateway/client.go)):
 
 ```go
 // in pkg/gateway
@@ -520,9 +520,9 @@ kvConn, err := kv.Build(kvName) // kvName from params[ParamKVConnector]
 ecConn, err := ec.Build(ecName) // ecName from params[ParamECConnector]
 ```
 
-- `kv.Connector` ([pkg/connectors/kv/kv.go](../pkg/connectors/kv/kv.go)) shapes the
+- `kv.Connector` ([pkg/coordinator/connectors/kv/kv.go](../pkg/coordinator/connectors/kv/kv.go)) shapes the
   `kv_transfer_params` written into the prefill and decode request bodies.
-- `ec.Connector` ([pkg/connectors/ec/ec.go](../pkg/connectors/ec/ec.go)) merges encode
+- `ec.Connector` ([pkg/coordinator/connectors/ec/ec.go](../pkg/coordinator/connectors/ec/ec.go)) merges encode
   responses and shapes `ec_transfer_params` for prefill.
 
 To add a connector protocol, add a name constant and a case in the relevant `Build`
@@ -539,10 +539,10 @@ confirm the output before claiming the step works.
 
 ## Configuring the pipeline
 
-Configuration is a YAML file passed with `--config` (default `configs/coordinator.yaml`).
-[configs/coordinator.yaml](../configs/coordinator.yaml) is the annotated canonical
+Configuration is a YAML file passed with `--config` (default `config/coordinator/coordinator.yaml`).
+[config/coordinator/coordinator.yaml](../config/coordinator/coordinator.yaml) is the annotated canonical
 example: every recognized key is present, required keys uncommented, optional keys shown
-commented with their defaults. The loader is [pkg/config/config.go](../pkg/config/config.go).
+commented with their defaults. The loader is [pkg/coordinator/config/config.go](../pkg/coordinator/config/config.go).
 
 ### Top-level structure
 
@@ -666,7 +666,7 @@ only the request carrier differs.
 | `decode` | Stream the final completion to the client. | `kv_connector` |
 
 Parameter semantics and defaults are documented inline in
-[configs/coordinator.yaml](../configs/coordinator.yaml). The wire formats each step
+[config/coordinator/coordinator.yaml](../config/coordinator/coordinator.yaml). The wire formats each step
 produces are in [communication.md](communication.md).
 
 ### Adding a step to the pipeline
