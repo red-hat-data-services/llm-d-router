@@ -28,7 +28,7 @@ var hopByHopHeaders = map[string]bool{
 	"proxy-authenticate":  true,
 	"proxy-authorization": true,
 	"te":                  true,
-	"trailers":            true,
+	"trailer":             true,
 	"transfer-encoding":   true,
 	"upgrade":             true,
 }
