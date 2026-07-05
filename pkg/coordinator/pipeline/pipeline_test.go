@@ -33,7 +33,7 @@ func (m *mockStep) Execute(ctx context.Context, rc *RequestContext) error {
 }
 
 func TestPipeline_ExecutesStepsInOrder(t *testing.T) {
-	var order []string
+	order := []string{}
 	steps := []Step{
 		&mockStep{name: "a", fn: func(_ context.Context, _ *RequestContext) error {
 			order = append(order, "a")
