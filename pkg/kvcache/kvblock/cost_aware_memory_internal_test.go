@@ -23,7 +23,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/llm-d/llm-d-kv-cache/pkg/utils/logging"
+	"github.com/llm-d/llm-d-router/pkg/common/observability/logging"
 )
 
 // TestCostAwareKeyIndexBoundedUnderEviction verifies keyIndex does not grow with

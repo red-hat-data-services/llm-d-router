@@ -29,7 +29,7 @@ import (
 	"github.com/dgraph-io/ristretto/v2"
 	"github.com/dustin/go-humanize"
 	lru "github.com/hashicorp/golang-lru/v2"
-	"github.com/llm-d/llm-d-kv-cache/pkg/utils/logging"
+	"github.com/llm-d/llm-d-router/pkg/common/observability/logging"
 )
 
 const (

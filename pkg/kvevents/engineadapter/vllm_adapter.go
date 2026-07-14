@@ -21,7 +21,7 @@ import (
 
 	"github.com/vmihailenco/msgpack/v5"
 
-	"github.com/llm-d/llm-d-kv-cache/pkg/kvevents"
+	"github.com/llm-d/llm-d-router/pkg/kvevents"
 )
 
 // VLLMAdapter implements the kvevents.EngineAdapter interface for vLLM engines.

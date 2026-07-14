@@ -23,7 +23,7 @@ package engineadapter
 import (
 	"fmt"
 
-	"github.com/llm-d/llm-d-kv-cache/pkg/kvevents"
+	"github.com/llm-d/llm-d-router/pkg/kvevents"
 )
 
 const (

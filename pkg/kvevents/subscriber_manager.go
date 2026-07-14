@@ -20,7 +20,7 @@ import (
 	"context"
 	"sync"
 
-	"github.com/llm-d/llm-d-kv-cache/pkg/utils/logging"
+	"github.com/llm-d/llm-d-router/pkg/common/observability/logging"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 

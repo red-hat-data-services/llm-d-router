@@ -20,7 +20,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/llm-d/llm-d-kv-cache/pkg/kvevents"
+	"github.com/llm-d/llm-d-router/pkg/kvevents"
 	"github.com/vmihailenco/msgpack/v5"
 )
 

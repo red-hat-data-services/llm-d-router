@@ -19,7 +19,7 @@ package engineadapter //nolint:testpackage // Tests access unexported functions
 import (
 	"testing"
 
-	"github.com/llm-d/llm-d-kv-cache/pkg/kvevents"
+	"github.com/llm-d/llm-d-router/pkg/kvevents"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/vmihailenco/msgpack/v5"

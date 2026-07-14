@@ -103,44 +103,5 @@ type RenderChatRequest struct {
 	ChatTemplateKWArgs        map[string]interface{} `json:"chat_template_kwargs,omitempty"`
 }
 
-type RenderRequest struct {
-	Key              string `json:"key"`
-	Text             string `json:"text"`
-	AddSpecialTokens bool   `json:"add_special_tokens,omitempty"`
-}
-
 // Offset represents a character offset range with [start, end] indices.
 type Offset [2]uint
-
-type RenderResponse struct {
-	TokenIDs       []uint32 `json:"input_ids"`
-	OffsetMappings []Offset `json:"offset_mapping"`
-}
-
-// DeepCopy creates a deep copy of the RenderChatRequest.
-func (req *RenderChatRequest) DeepCopy() (*RenderChatRequest, error) {
-	b, err := json.Marshal(req)
-	if err != nil {
-		return nil, err
-	}
-	var out RenderChatRequest
-	err = json.Unmarshal(b, &out)
-	if err != nil {
-		return nil, err
-	}
-	return &out, nil
-}
-
-// DeepCopy creates a deep copy of the RenderRequest.
-func (req *RenderRequest) DeepCopy() (*RenderRequest, error) {
-	b, err := json.Marshal(req)
-	if err != nil {
-		return nil, err
-	}
-	var out RenderRequest
-	err = json.Unmarshal(b, &out)
-	if err != nil {
-		return nil, err
-	}
-	return &out, nil
-}

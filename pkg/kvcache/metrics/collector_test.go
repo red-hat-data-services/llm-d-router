@@ -50,9 +50,6 @@ func TestCollectorsIncludesAllMetrics(t *testing.T) {
 		{"LookupHits", LookupHits},
 		{"LookupLatency", LookupLatency},
 		{"MaxPodHitCount", MaxPodHitCount},
-		{"RenderChatTemplateLatency", RenderChatTemplateLatency},
-		{"TokenizationLatency", TokenizationLatency},
-		{"TokenizedTokensCount", TokenizedTokensCount},
 		{"DedupRemovedHashesSuppressed", DedupRemovedHashesSuppressed},
 		{"DedupRemovedHashesForwarded", DedupRemovedHashesForwarded},
 	}

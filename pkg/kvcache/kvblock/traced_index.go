@@ -22,7 +22,7 @@ import (
 	"go.opentelemetry.io/otel/trace"
 	"k8s.io/apimachinery/pkg/util/sets"
 
-	"github.com/llm-d/llm-d-kv-cache/pkg/telemetry"
+	"github.com/llm-d/llm-d-router/pkg/telemetry"
 )
 
 type tracedIndex struct {

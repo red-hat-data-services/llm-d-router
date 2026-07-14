@@ -1,5 +1,5 @@
 /*
-Copyright 2026 The llm-d Authors.
+Copyright 2025 The llm-d Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -14,18 +14,15 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package kvcache
+package tokenization
 
-import (
-	"context"
+import "github.com/llm-d/llm-d-router/pkg/kvcache/kvblock"
 
-	"github.com/llm-d/llm-d-kv-cache/pkg/tokenization"
-	"github.com/llm-d/llm-d-kv-cache/pkg/tokenization/types"
-)
-
-// TokenizersPool abstracts the tokenization pool for testability/mocking.
-type TokenizersPool interface {
-	Tokenize(renderReq *types.RenderChatRequest, prompt string) ([]uint32, *tokenization.MultiModalFeatures)
-	Run(ctx context.Context)
-	SetTokenizer(tokenizer tokenization.Tokenizer, modelName string)
+// MultiModalFeatures holds multimodal metadata produced by the tokenizer.
+// Decoupled from proto types so callers don't depend on generated code.
+type MultiModalFeatures struct {
+	// MMHashes maps modality (e.g. "image") to per-item content hashes.
+	MMHashes map[string][]string
+	// MMPlaceholders maps modality to per-item placeholder token ranges.
+	MMPlaceholders map[string][]kvblock.PlaceholderRange
 }

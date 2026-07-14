@@ -26,8 +26,8 @@ import (
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 
-	"github.com/llm-d/llm-d-kv-cache/pkg/telemetry"
-	"github.com/llm-d/llm-d-kv-cache/version"
+	"github.com/llm-d/llm-d-router/pkg/telemetry"
+	"github.com/llm-d/llm-d-router/version"
 )
 
 // recordScope starts and ends a single span from the given tracer and returns

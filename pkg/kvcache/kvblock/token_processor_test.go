@@ -25,7 +25,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/llm-d/llm-d-kv-cache/pkg/kvcache/kvblock"
+	"github.com/llm-d/llm-d-router/pkg/kvcache/kvblock"
 )
 
 func TestNewChunkedTokenDatabase_Validation(t *testing.T) {

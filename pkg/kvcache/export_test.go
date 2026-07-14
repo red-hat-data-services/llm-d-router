@@ -17,16 +17,15 @@ limitations under the License.
 package kvcache
 
 import (
-	"github.com/llm-d/llm-d-kv-cache/pkg/kvcache/kvblock"
+	"github.com/llm-d/llm-d-router/pkg/kvcache/kvblock"
 )
 
 // NewIndexerForTest constructs an Indexer with injected dependencies.
 // Exported only for testing via the export_test.go pattern.
-func NewIndexerForTest(tp kvblock.TokenProcessor, idx kvblock.Index, scorer KVBlockScorer, pool TokenizersPool) *Indexer {
+func NewIndexerForTest(tp kvblock.TokenProcessor, idx kvblock.Index, scorer KVBlockScorer) *Indexer {
 	return &Indexer{
 		tokenProcessor: tp,
 		kvBlockIndex:   idx,
 		kvBlockScorer:  scorer,
-		tokenizersPool: pool,
 	}
 }

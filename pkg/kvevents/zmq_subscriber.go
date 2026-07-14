@@ -22,7 +22,7 @@ import (
 	zmq4 "github.com/go-zeromq/zmq4"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
-	"github.com/llm-d/llm-d-kv-cache/pkg/utils/logging"
+	"github.com/llm-d/llm-d-router/pkg/common/observability/logging"
 )
 
 const (

@@ -22,7 +22,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/llm-d/llm-d-kv-cache/pkg/kvcache/metrics"
+	"github.com/llm-d/llm-d-router/pkg/kvcache/metrics"
 	"k8s.io/apimachinery/pkg/util/sets"
 )
 
@@ -34,8 +34,6 @@ type IndexConfig struct {
 	InMemoryConfig *InMemoryIndexConfig `json:"inMemoryConfig"`
 	// RedisConfig holds the configuration for the Redis index.
 	RedisConfig *RedisIndexConfig `json:"redisConfig"`
-	// ValkeyConfig holds the configuration for the Valkey index.
-	ValkeyConfig *RedisIndexConfig `json:"valkeyConfig"`
 	// CostAwareMemoryConfig holds the configuration for the cost-aware memory index.
 	CostAwareMemoryConfig *CostAwareMemoryIndexConfig `json:"costAwareMemoryConfig"`
 
@@ -70,12 +68,6 @@ func NewIndex(ctx context.Context, cfg *IndexConfig) (Index, error) {
 		idx, err = NewCostAwareMemoryIndex(cfg.CostAwareMemoryConfig)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create cost-aware memory index: %w", err)
-		}
-	case cfg.ValkeyConfig != nil:
-		//nolint:contextcheck // NewValkeyIndex does not accept context parameter
-		idx, err = NewValkeyIndex(cfg.ValkeyConfig)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create Valkey index: %w", err)
 		}
 	case cfg.RedisConfig != nil:
 		//nolint:contextcheck // NewRedisIndex does not accept context parameter

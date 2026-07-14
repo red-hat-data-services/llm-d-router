@@ -20,7 +20,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/llm-d/llm-d-kv-cache/pkg/kvcache/kvblock"
+	"github.com/llm-d/llm-d-router/pkg/kvcache/kvblock"
 )
 
 // KVScoringStrategy defines the strategy used to score pods for KV cache block reuse.
