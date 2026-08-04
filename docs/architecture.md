@@ -154,11 +154,8 @@ kind: EndpointPickerConfig
 plugins:
 - type: precise-prefix-cache-producer
   parameters:
-    indexerConfig:
-      tokenProcessorConfig:
-        blockSize: 5
-      kvBlockIndexConfig:
-        maxPrefixBlocksToMatch: 256
+    tokenProcessorConfig:
+      blockSizeTokens: 5
 - type: prefix-cache-scorer
   parameters:
     prefixMatchInfoProducerName: precise-prefix-cache-producer
@@ -195,6 +192,8 @@ RequestHandler:
 - When no parsers are configured, `openai-parser`, `anthropic-parser`, and `vllmhttp-parser` are used.
 
 FlowControl:
+- The flow control admission layer itself is off by default; enable it with
+  `featureGates: ["flowControl"]`.
 - `fcfs-ordering-policy`, `global-strict-fairness-policy`, and `static-usage-limit-policy` are configured when absent.
 - `utilization-detector` is configured as the saturation detector when none is set.
 
