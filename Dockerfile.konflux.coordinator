@@ -1,0 +1,47 @@
+FROM registry.access.redhat.com/ubi9/go-toolset:1.26.5@sha256:91d07f2b7f402fe2379fd62eb2fff975c814a595e2ff2988fd7c580568f5f90c AS go-builder
+
+ARG TARGETOS
+ARG TARGETARCH
+ARG COMMIT_SHA=unknown
+ARG BUILD_REF
+ARG LDFLAGS="-s -w"
+
+USER root
+
+WORKDIR /workspace
+
+COPY go.mod go.mod
+COPY go.sum go.sum
+
+RUN go mod download
+
+COPY cmd/ cmd/
+COPY internal/ internal/
+COPY pkg/ pkg/
+COPY version/ version/
+COPY config/coordinator/ config/coordinator/
+
+ENV CGO_ENABLED=1
+ENV GOEXPERIMENT=strictfipsruntime
+RUN GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build \
+    -ldflags="${LDFLAGS} -X github.com/llm-d/llm-d-router/version.CommitSHA=${COMMIT_SHA} -X github.com/llm-d/llm-d-router/version.BuildRef=${BUILD_REF}" \
+    -o bin/coordinator ./cmd/coordinator/...
+
+FROM registry.redhat.io/ubi9/ubi-minimal-pqc:9.8-1788217333@sha256:3e009398a8aa8eec621393fbf308c5e622f174900e44e8d5fe224c637920924a
+
+WORKDIR /
+COPY --from=go-builder /workspace/bin/coordinator /app/coordinator
+COPY --from=go-builder /workspace/config/coordinator/ /config/coordinator/
+
+USER 65532:65532
+
+EXPOSE 8080
+
+ENTRYPOINT ["/app/coordinator", "--config", "/config/coordinator/coordinator.yaml"]
+
+LABEL com.redhat.component="odh-llm-d-coordinator" \
+      name="odh-llm-d-coordinator" \
+      description="odh-llm-d-coordinator" \
+      summary="odh-llm-d-coordinator" \
+      io.k8s.display-name="odh-llm-d-coordinator" \
+      io.k8s.description="odh-llm-d-coordinator"
