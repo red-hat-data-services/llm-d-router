@@ -33,7 +33,7 @@ RUN CGO_ENABLED=1 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build \
        -o bin/epp cmd/epp/main.go
 
 # Runtime stage
-FROM registry.redhat.io/ubi9/ubi-minimal-pqc:9.8-1788217333@sha256:3e009398a8aa8eec621393fbf308c5e622f174900e44e8d5fe224c637920924a
+FROM registry.redhat.io/ubi9/ubi-minimal-pqc:9.8-1790666307@sha256:154811228435396156662801174566829a2c27d8a0b0f9af6e6d6e76ddf87ffe
 
 WORKDIR /
 
