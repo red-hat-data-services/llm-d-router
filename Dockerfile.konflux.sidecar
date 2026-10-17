@@ -30,7 +30,7 @@ RUN go build -a -tags strictfipsruntime -o bin/pd-sidecar \
        -ldflags="-X github.com/llm-d/llm-d-router/pkg/sidecar/version.CommitSHA=${COMMIT_SHA} -X github.com/llm-d/llm-d-router/pkg/sidecar/version.BuildRef=${BUILD_REF}" \
        cmd/cmd.go
 
-FROM registry.redhat.io/ubi9/ubi-minimal-pqc:9.8-1790666307@sha256:154811228435396156662801174566829a2c27d8a0b0f9af6e6d6e76ddf87ffe
+FROM registry.redhat.io/ubi9/ubi-minimal-pqc:9.8-1791946957@sha256:b3a0b012de0c578082e1bc5b01c8bc27461b4eeb571a0b1a2b21a07dbd845a62
 WORKDIR /
 COPY --from=builder /workspace/bin/pd-sidecar /app/pd-sidecar
 USER 65532:65532
