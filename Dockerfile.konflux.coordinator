@@ -1,4 +1,4 @@
-FROM registry.access.redhat.com/ubi9/go-toolset:1.26.7-1792010711@sha256:60fd6fb2998c40ad0d6561c34e83588b986a0cf7771f64e5e5c295ba87101f9b AS go-builder
+FROM registry.access.redhat.com/ubi9/go-toolset:1.26.10-1792671270@sha256:edb9452603fa48e9882063f001ecd7d322add20f1564a4f05f38f6683be5ea94 AS go-builder
 
 ARG TARGETOS
 ARG TARGETARCH
@@ -27,7 +27,7 @@ RUN GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build \
     -ldflags="${LDFLAGS} -X github.com/llm-d/llm-d-router/version.CommitSHA=${COMMIT_SHA} -X github.com/llm-d/llm-d-router/version.BuildRef=${BUILD_REF}" \
     -o bin/coordinator ./cmd/coordinator/...
 
-FROM registry.redhat.io/ubi9/ubi-minimal-pqc:9.8-1791946957@sha256:b3a0b012de0c578082e1bc5b01c8bc27461b4eeb571a0b1a2b21a07dbd845a62
+FROM registry.redhat.io/ubi9/ubi-minimal-pqc:9.8-1792759377@sha256:d0fdfb1401ee754872f60c2527563671c16112080e5254139133908178700911
 
 WORKDIR /
 COPY --from=go-builder /workspace/bin/coordinator /app/coordinator
