@@ -25,6 +25,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net"
 	"net/http"
 	"os"
@@ -563,6 +564,14 @@ func renderOnlyBudget(path string, payload []byte) ([]byte, error) {
 // over return_mm_kwargs. A version without a field ignores it.
 var omitMMKwargsFields = []byte(`"return_mm_kwargs":false,"mm_payload":"none"`)
 
+func omitMMKwargsCapacity(payloadLen int) (int, error) {
+	extra := len(omitMMKwargsFields) + 1
+	if payloadLen < 0 || payloadLen > math.MaxInt-extra {
+		return 0, errors.New("render payload too large")
+	}
+	return payloadLen + extra, nil
+}
+
 // omitMMKwargs adds omitMMKwargsFields before the closing brace of the render copy of a JSON
 // object. It splices instead of decoding, because the body can carry megabytes of base64 images.
 // A later duplicate key wins in vLLM's parser, so client-sent values cannot override them.
@@ -572,7 +581,11 @@ func omitMMKwargs(payload []byte) ([]byte, error) {
 	if end < 0 || len(head) == 0 || head[0] != '{' || len(bytes.TrimSpace(payload[end+1:])) != 0 {
 		return nil, errors.New("render payload is not a JSON object")
 	}
-	out := make([]byte, 0, len(payload)+len(omitMMKwargsFields)+1)
+	capacity, err := omitMMKwargsCapacity(len(payload))
+	if err != nil {
+		return nil, err
+	}
+	out := make([]byte, 0, capacity)
 	out = append(out, payload[:end]...)
 	if head[len(head)-1] != '{' {
 		out = append(out, ',')

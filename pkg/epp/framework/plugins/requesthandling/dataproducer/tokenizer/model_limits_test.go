@@ -395,6 +395,18 @@ func TestOmitMMKwargs(t *testing.T) {
 	}
 }
 
+func TestOmitMMKwargsCapacityRejectsOverflow(t *testing.T) {
+	maxInt := int(^uint(0) >> 1)
+	extra := len(omitMMKwargsFields) + 1
+
+	capacity, err := omitMMKwargsCapacity(maxInt - extra)
+	require.NoError(t, err)
+	assert.Equal(t, maxInt, capacity)
+
+	_, err = omitMMKwargsCapacity(maxInt - extra + 1)
+	require.Error(t, err)
+}
+
 func TestOmitMMKwargsAppliesToRawPayload(t *testing.T) {
 	var seen map[string]json.RawMessage
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
