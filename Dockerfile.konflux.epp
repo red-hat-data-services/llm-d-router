@@ -35,7 +35,7 @@ RUN GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build \
        -o bin/epp cmd/epp/main.go
 
 # Runtime stage
-FROM registry.access.redhat.com/ubi10/ubi-minimal:10.2@sha256:f0c7b9ae9914fcf183e7c36fc46864903c2d2caf3af327421913ae54b3d29e94
+FROM registry.access.redhat.com/ubi10/ubi-minimal:10.3-1795196920@sha256:d63890a635f8f19177bce1775f74f587a47f4456844f1392456c4e3673a48753
 
 WORKDIR /
 
