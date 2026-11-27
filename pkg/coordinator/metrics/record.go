@@ -16,7 +16,18 @@ limitations under the License.
 
 package metrics
 
-import "time"
+import (
+	"context"
+	"strconv"
+	"time"
+
+	metricsutil "github.com/llm-d/llm-d-router/pkg/common/observability/metrics"
+)
+
+// RecordBuildInfo sets the build info gauge for the given commit and build ref.
+func RecordBuildInfo(commit, buildRef string) {
+	buildInfo.WithLabelValues(commit, buildRef).Set(1)
+}
 
 // IncRequestTotal increments request_total for the given model.
 func IncRequestTotal(modelName string) {
@@ -50,15 +61,23 @@ func DecRequestRunning(modelName string) {
 	requestRunning.WithLabelValues(boundModel(modelName)).Dec()
 }
 
-// RecordStepDuration observes the wall-time latency of one pipeline step.
-func RecordStepDuration(step string, d time.Duration) {
-	stepDuration.WithLabelValues(step).Observe(d.Seconds())
+// RecordStepDuration observes the wall-time latency of one pipeline step and
+// attaches the step's trace as an exemplar, so a point on a step latency graph
+// links to the span that produced it.
+func RecordStepDuration(ctx context.Context, step string, d time.Duration) {
+	metricsutil.ObserveWithTraceExemplar(ctx, stepDuration.WithLabelValues(step), d.Seconds())
 }
 
 // IncStepErrorTotal increments step_errors_total for the given step and
 // classified error code.
 func IncStepErrorTotal(step, errorCode string) {
 	stepErrorTotal.WithLabelValues(step, errorCode).Inc()
+}
+
+// IncStepRerunTotal increments step_reruns_total for the step that requested
+// the re-run.
+func IncStepRerunTotal(step string) {
+	stepRerunTotal.WithLabelValues(step).Inc()
 }
 
 // IncStepRunning increments the per-step in-flight gauge.
@@ -101,6 +120,25 @@ func IncConditionalDecodeProbes(result string) {
 	conditionalDecodeProbesTotal.WithLabelValues(result).Inc()
 }
 
+// AddForceStreamBufferedBytes adds n to the force-stream buffer gauge when a
+// forced request of step reserves budget.
+func AddForceStreamBufferedBytes(step string, n int64) {
+	forceStreamBufferedBytes.WithLabelValues(step).Add(float64(n))
+}
+
+// SubForceStreamBufferedBytes subtracts n from the force-stream buffer gauge
+// when a forced request of step releases its reservation. Balance with
+// AddForceStreamBufferedBytes.
+func SubForceStreamBufferedBytes(step string, n int64) {
+	forceStreamBufferedBytes.WithLabelValues(step).Sub(float64(n))
+}
+
+// IncForceStreamTotal increments force_stream_total for one model's candidate
+// outcome in step. The outcome label values are the ForceStreamResult* constants.
+func IncForceStreamTotal(modelName, step, result string) {
+	forceStreamTotal.WithLabelValues(boundModel(modelName), step, result).Inc()
+}
+
 // RecordEncodeSubrequests observes the number of Encode subrequests for one
 // client request, including zero when Encode does not run.
 func RecordEncodeSubrequests(route string, n int) {
@@ -140,4 +178,13 @@ func streamLabelValue(stream bool) string {
 		return StreamTrue
 	}
 	return StreamFalse
+}
+
+// IncPromptTokenMismatch increments prompt_token_mismatch_total for one decode
+// or served conditional-decode response whose usage.prompt_tokens (or
+// input_tokens) did not equal the rendered token count. idsForwarded says whether the decode leg carried the
+// rendered IDs, in which case the worker ignored them, or rendered the prompt
+// itself, in which case the renderers disagree.
+func IncPromptTokenMismatch(modelName, apiType string, idsForwarded bool) {
+	promptTokenMismatchTotal.WithLabelValues(boundModel(modelName), apiType, strconv.FormatBool(idsForwarded)).Inc()
 }

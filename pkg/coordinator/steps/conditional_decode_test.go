@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -289,6 +290,40 @@ func TestConditionalDecodeStep_UnreachableFormat_ReturnsError(t *testing.T) {
 	if _, err := step.(*ConditionalDecodeStep).prepareBody(reqCtx); err == nil {
 		t.Fatal("expected an error for an unreachable request format")
 	}
+}
+
+// With forward_prompt_token_ids set, chat-shaped probes carry the rendered IDs
+// in kv_transfer_params.prompt_token_ids; multimodal, unrendered and
+// non-chat requests, and probes with the parameter unset, carry none.
+func TestConditionalDecodeStep_PromptTokenIDsInKVParams(t *testing.T) {
+	for _, tc := range promptTokenIDsCases() {
+		t.Run(tc.name, func(t *testing.T) {
+			step, err := NewConditionalDecodeStep(gateway.New(config.GatewayConfig{Address: "http://unused"}), tc.params)
+			require.NoError(t, err)
+			reqCtx := &pipeline.RequestContext{
+				OriginalPath:      tc.path,
+				TokenIDs:          tc.tokens,
+				MultimodalEntries: tc.entries,
+				Body:              map[string]any{"model": testModelName},
+			}
+			maps.Copy(reqCtx.Body, tc.extra)
+			body, err := step.(*ConditionalDecodeStep).prepareBody(reqCtx)
+			require.NoError(t, err)
+			kvParams, _ := body[reqcommon.FieldKVTransferParams].(map[string]any)
+			got, ok := kvParams[reqcommon.FieldPromptTokenIDs]
+			require.Equal(t, tc.want, ok, "prompt_token_ids present (body %v)", body)
+			if tc.want {
+				require.Equal(t, tc.tokens, got)
+			}
+			_, onClientBody := reqCtx.Body[reqcommon.FieldKVTransferParams]
+			require.False(t, onClientBody, "prepareBody must not write to reqCtx.Body")
+		})
+	}
+}
+
+func TestConditionalDecodeStep_ForwardPromptTokenIDs_RejectsNonBool(t *testing.T) {
+	_, err := NewConditionalDecodeStep(gateway.New(config.GatewayConfig{Address: "http://unused"}), map[string]any{ParamForwardPromptTokenIDs: "yes"})
+	require.Error(t, err)
 }
 
 func TestConditionalDecodeStep_CacheHit_Streaming(t *testing.T) {

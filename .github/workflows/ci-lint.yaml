@@ -55,6 +55,9 @@ jobs:
               - .typos.toml
               - scripts/**
               - hack/**
+              - pkg/common/observability/semconv/registry/**
+              - docs/telemetry.md
+              - docs/metrics.md
               - test/**
               - .github/workflows/ci-lint.yaml
 
@@ -74,7 +77,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v7
         with:
-          go-version: '1.26.10'
+          go-version: '1.27.4'
           cache: true
 
       - name: Verify go.mod and go.sum are tidy
@@ -96,6 +99,12 @@ jobs:
           key: go-cache-${{ runner.os }}-${{ hashFiles('go.sum') }}
           restore-keys: |
             go-cache-${{ runner.os }}-
+
+      - name: Verify telemetry generation and contracts
+        env:
+          GO_MOD_CACHE_VOL: ${{ steps.go-cache.outputs.mod }}
+          GO_BUILD_CACHE_VOL: ${{ steps.go-cache.outputs.build }}
+        run: make verify-telemetry test-telemetry
 
       - name: Run make build
         id: build
@@ -136,7 +145,7 @@ jobs:
       # workflow, per GitHub's guidance for actions that write security data.
       - name: Upload gosec SARIF
         if: ${{ !cancelled() && github.event_name != 'merge_group' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
-        uses: github/codeql-action/upload-sarif@6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee # v4.39.0
+        uses: github/codeql-action/upload-sarif@1bd86f2fdb4b86187fa4059f16f31a3202acc9ea # v4.39.4
         with:
           sarif_file: gosec.sarif
           category: gosec

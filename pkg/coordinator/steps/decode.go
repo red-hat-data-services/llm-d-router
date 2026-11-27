@@ -27,8 +27,8 @@ import (
 
 	logutil "github.com/llm-d/llm-d-router/pkg/common/observability/logging"
 	reqcommon "github.com/llm-d/llm-d-router/pkg/common/request"
-	"github.com/llm-d/llm-d-router/pkg/common/usage"
 
+	"github.com/llm-d/llm-d-router/pkg/coordinator/connectors/ec"
 	"github.com/llm-d/llm-d-router/pkg/coordinator/connectors/kv"
 	"github.com/llm-d/llm-d-router/pkg/coordinator/gateway"
 	coordmetrics "github.com/llm-d/llm-d-router/pkg/coordinator/metrics"
@@ -42,8 +42,13 @@ func init() {
 }
 
 type DecodeStep struct {
-	gwClient *gateway.Client
-	kv       kv.Connector
+	gwClient          *gateway.Client
+	kv                kv.Connector
+	ec                ec.Connector
+	promptTokenParity string
+	forwardTokenIDs   bool
+	// budget is set when the pipeline enables force-streaming.
+	budget *forceStreamBudget
 }
 
 func NewDecodeStep(gwClient *gateway.Client, params map[string]any) (pipeline.Step, error) {
@@ -53,20 +58,88 @@ func NewDecodeStep(gwClient *gateway.Client, params map[string]any) (pipeline.St
 	if err := rejectUseOpenAIFormatOverride(DecodeStepName, params); err != nil {
 		return nil, err
 	}
+	if err := rejectForceStreamParams(DecodeStepName, params); err != nil {
+		return nil, err
+	}
 	kvConn, err := buildKVConnector(params)
 	if err != nil {
 		return nil, fmt.Errorf("decode: %w", err)
 	}
-	return &DecodeStep{gwClient: gwClient, kv: kvConn}, nil
+	ecConn, err := buildECConnector(params)
+	if err != nil {
+		return nil, fmt.Errorf("decode: %w", err)
+	}
+	parity, err := parsePromptTokenParity(params)
+	if err != nil {
+		return nil, fmt.Errorf("decode: %w", err)
+	}
+	forwardTokenIDs, _, err := paramBool(params, ParamForwardPromptTokenIDs)
+	if err != nil {
+		return nil, fmt.Errorf("decode: %w", err)
+	}
+	return &DecodeStep{gwClient: gwClient, kv: kvConn, ec: ecConn, promptTokenParity: parity, forwardTokenIDs: forwardTokenIDs}, nil
 }
 
 func (s *DecodeStep) Name() string { return DecodeStepName }
 
+func (s *DecodeStep) enableForceStream(budget *forceStreamBudget) { s.budget = budget }
+
 func (s *DecodeStep) Execute(ctx context.Context, reqCtx *pipeline.RequestContext) error {
+	switch g := reqCtx.GRPC.(type) {
+	case *pipeline.SGLangGRPCRequest:
+		return s.executeSGLangGRPC(ctx, reqCtx, g)
+	case *pipeline.VLLMGRPCRequest:
+		return s.executeVLLMGRPC(ctx, reqCtx, g)
+	}
 	logger := log.FromContext(ctx).WithName(DecodeStepName)
 
 	if err := s.prepareDecodeBody(ctx, reqCtx); err != nil {
 		return err
+	}
+	parity, injectedUsage := setupParity(DecodeStepName, s.promptTokenParity, logger, reqCtx, reqCtx.Body)
+
+	// Force-streaming applies only to a non-streaming request. A request whose
+	// reply may carry fields the reassembler drops (tool calls, logprobs,
+	// reasoning), or that the engine would not serve as a stream, takes the
+	// pass-through; forceStreamLossy catches what the request declares up front,
+	// and a server-side default is caught on the frame mid-stream (both fall back
+	// here). Every other candidate reserves budget and reassembles the whole reply;
+	// one whose estimate exceeds the per-request cap, or that finds the budget
+	// full, falls through to the pass-through below, which buffers nothing.
+	var forceStreamResult string
+	if s.budget != nil && !reqCtx.Stream {
+		if shape, shapeOK := shapeForAPIType(reqcommon.DetectAPIType(reqCtx.OriginalPath)); shapeOK {
+			result := coordmetrics.ForceStreamResultFallbackUnsupported
+			// An SGLang decode server has no local-prefill path, so a fallback could
+			// not recompute a prompt whose handoff the forced attempt used.
+			if s.kv.Name() != kv.SGLang {
+				leg := forceStreamLeg{step: DecodeStepName, upstream: coordmetrics.UpstreamDecode}
+				var sent bool
+				var err error
+				result, sent, err = tryForceStream(ctx, logger, s.gwClient, s.budget, leg, reqCtx, reqCtx.Body, shape, parity)
+				if result == "" {
+					return err
+				}
+				// The forced attempt failed with nothing written. Unless the connector
+				// is replay-safe, it already used the one-shot handoff the body names,
+				// so the fallback drops it and the decode pod recomputes the prompt; the
+				// reply is slower but correct.
+				if sent && !kvHandoffReplaySafe(s.kv) {
+					logger.V(logutil.DEFAULT).Info("force-stream failed and its KV block handoff is spent; decode will recompute the prompt", "result", result)
+					// The rendered IDs do not depend on the handoff, so they stay.
+					if kvParams, _ := reqCtx.Body[reqcommon.FieldKVTransferParams].(map[string]any); kvParams != nil {
+						if ids, ok := kvParams[reqcommon.FieldPromptTokenIDs]; ok {
+							reqCtx.Body[reqcommon.FieldKVTransferParams] = map[string]any{reqcommon.FieldPromptTokenIDs: ids}
+						} else {
+							delete(reqCtx.Body, reqcommon.FieldKVTransferParams)
+						}
+					}
+					// The prefill cache-hit count describes the handoff just dropped.
+					reqCtx.PrefillCachedTokens = nil
+				}
+			}
+			forceStreamResult = result
+		}
 	}
 
 	logger.V(logutil.DEFAULT).Info("sending request", "path", reqCtx.OriginalPath, "stream", reqCtx.Stream)
@@ -76,8 +149,18 @@ func (s *DecodeStep) Execute(ctx context.Context, reqCtx *pipeline.RequestContex
 		return err
 	}
 
-	writer, finalize := s.responseWriter(reqCtx)
-	out := serveDecode(logger, s.gwClient.Transport(), writer, proxyReq, coordmetrics.UpstreamDecode, nil)
+	// A decline or fallback outcome is recorded when the worker answers the
+	// pass-through, so a client that left before then records none.
+	var onResponse func(*http.Response) error
+	if forceStreamResult != "" {
+		onResponse = func(*http.Response) error {
+			coordmetrics.IncForceStreamTotal(reqCtx.Model, DecodeStepName, forceStreamResult)
+			return nil
+		}
+	}
+
+	writer, finalize := parityResponseWriter(reqCtx, parity, injectedUsage)
+	out := serveDecode(logger, s.gwClient.Transport(), writer, proxyReq, coordmetrics.UpstreamDecode, onResponse)
 	if err := finalize(); err != nil {
 		// The buffered tail could not be forwarded, so the client holds a
 		// truncated response. Nothing can be written to say so: the status and
@@ -87,14 +170,14 @@ func (s *DecodeStep) Execute(ctx context.Context, reqCtx *pipeline.RequestContex
 	return out.streamedError(DecodeStepName)
 }
 
-// responseWriter returns the writer the decode response is streamed through,
-// and the function that flushes whatever it buffered. Without a prefill count
-// the client gets the decode worker's bytes untouched.
-func (s *DecodeStep) responseWriter(reqCtx *pipeline.RequestContext) (http.ResponseWriter, func() error) {
-	if reqCtx.PrefillCachedTokens == nil {
-		return reqCtx.ResponseWriter, func() error { return nil }
-	}
-	return usage.NewCachedTokensResponseWriter(reqCtx.ResponseWriter, *reqCtx.PrefillCachedTokens, reqCtx.Stream)
+// kvHandoffReplaySafe reports whether a decode body's kv_transfer_params may be
+// sent a second time. Only kv-shared-storage qualifies: its decode pod re-reads
+// the shared store, so a replay finds the KV again. The other connectors name a
+// one-shot handoff: the NIXL blocks the prefiller frees once pulled, the
+// kv-offloading P2P batch the prefiller releases once fetched, or the SGLang
+// bootstrap room. A connector not listed here is treated as one-shot too.
+func kvHandoffReplaySafe(conn kv.Connector) bool {
+	return conn.Name() == kv.SharedStorage
 }
 
 // prepareDecodeBody mutates reqCtx.Body in place rather than on a clone (unlike
@@ -111,12 +194,17 @@ func (s *DecodeStep) prepareDecodeBody(ctx context.Context, reqCtx *pipeline.Req
 	s.injectUUIDs(reqCtx, logger)
 
 	switch format {
-	case reqcommon.APITypeChatCompletions, reqcommon.APITypeResponses, reqcommon.APITypeMessages, reqcommon.APITypeVLLMGenerate:
+	case reqcommon.APITypeChatCompletions, reqcommon.APITypeResponses, reqcommon.APITypeMessages:
+		if sendsPromptTokenIDs(s.forwardTokenIDs, reqCtx, format) {
+			kvParams[reqcommon.FieldPromptTokenIDs] = reqCtx.TokenIDs
+		}
+		reqCtx.Body[reqcommon.FieldKVTransferParams] = kvParams
+	case reqcommon.APITypeVLLMGenerate:
 		reqCtx.Body[reqcommon.FieldKVTransferParams] = kvParams
 	case reqcommon.APITypeCompletions:
 		reqCtx.Body[reqcommon.FieldKVTransferParams] = kvParams
 		if len(reqCtx.TokenIDs) > 0 {
-			reqCtx.Body["prompt"] = reqCtx.TokenIDs
+			reqCtx.Body[reqcommon.FieldPrompt] = reqCtx.TokenIDs
 		}
 	default:
 		// kvParams and injectUUIDs above already ran; both are harmless here
@@ -170,7 +258,7 @@ func injectMediaPartUUIDs(items []any, apiType reqcommon.APIType, entries []pipe
 		modCounter[media.modality]++
 		hashes := hashesByMod[media.modality]
 		if localIdx < len(hashes) {
-			media.part["uuid"] = hashes[localIdx]
+			media.part[reqcommon.FieldUUID] = hashes[localIdx]
 			continue
 		}
 		// A miss means entries and parts got out of line upstream (see
